@@ -50,17 +50,18 @@ func TestAzureVMAttributeFilter(t *testing.T) {
 func TestFetchEntries_RetryAndKeepOrder(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// Create fetchers that fail different numbers of times before succeeding
-		failOnce := makeFetcherThatFailsNTimes(1, "fetcher1", "value1")
+		failOnce := makeFetcherThatFailsNTimes(ClusterECS, 1, "fetcher1", "value1")
 		alwaysFails := func(_ context.Context) (NodeMeta, error) {
-			return NodeMeta{}, errors.New("permanent failure")
+			return NodeMeta{Flags: ClusterK8s}, errors.New("permanent failure")
 		}
-		failTwice := makeFetcherThatFailsNTimes(2, "fetcher2", "value2")
-		succeedImmediately := makeFetcherThatFailsNTimes(0, "fetcher3", "value3")
+		failTwice := makeFetcherThatFailsNTimes(ClusterECS, 2, "fetcher2", "value2")
+		succeedImmediately := makeFetcherThatFailsNTimes(ClusterEC2, 0, "fetcher3", "value3")
 
 		entries := fetchEntries(t.Context(), DefaultRetryConfig, failOnce, alwaysFails, failTwice, succeedImmediately)
 
 		// All fetchers should eventually succeed and return their data
 		require.Equal(t, NodeMeta{
+			Flags:  ClusterEC2 | ClusterECS,
 			HostID: "host_fetcher3",
 			Metadata: []Entry{
 				{Key: "fetcher1_1", Value: "value1_1"},
@@ -81,6 +82,7 @@ func TestFetchEntries_DeduplicateByPriority(t *testing.T) {
 		// lowest-priority fetcher
 		func(_ context.Context) (NodeMeta, error) {
 			return NodeMeta{
+				Flags:  ClusterK8s,
 				HostID: "should-be-overridden",
 				Metadata: []Entry{
 					{Key: "host.name", Value: "will-be-filtered"},
@@ -93,6 +95,7 @@ func TestFetchEntries_DeduplicateByPriority(t *testing.T) {
 		// highest-priority fetcher
 		func(_ context.Context) (NodeMeta, error) {
 			return NodeMeta{
+				Flags:  ClusterEC2,
 				HostID: "vm-01234567",
 				Metadata: []Entry{
 					{Key: "foo", Value: "bar"},
@@ -104,6 +107,7 @@ func TestFetchEntries_DeduplicateByPriority(t *testing.T) {
 		},
 	)
 	assert.Equal(t, NodeMeta{
+		Flags:  ClusterK8s | ClusterEC2,
 		HostID: "vm-01234567",
 		Metadata: []Entry{
 			{Key: "baz", Value: "bae"},
@@ -121,7 +125,7 @@ func TestHostIDOverride(t *testing.T) {
 	assert.Equal(t, "host_override", nm.HostID)
 }
 
-func makeFetcherThatFailsNTimes(failCount int, key, value string) fetcher {
+func makeFetcherThatFailsNTimes(flags NodeFlags, failCount int, key, value string) fetcher {
 	attempts := atomic.Int32{}
 	return func(_ context.Context) (NodeMeta, error) {
 		attempt := attempts.Add(1)
@@ -129,6 +133,7 @@ func makeFetcherThatFailsNTimes(failCount int, key, value string) fetcher {
 			return NodeMeta{}, errors.New("simulated failure")
 		}
 		return NodeMeta{
+			Flags:  flags,
 			HostID: "host_" + key,
 			Metadata: []Entry{
 				{Key: attr.Name(key + "_1"), Value: value + "_1"},

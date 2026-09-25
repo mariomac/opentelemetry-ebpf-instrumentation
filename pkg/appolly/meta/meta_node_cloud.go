@@ -15,7 +15,7 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
-func otelNodeFetcher(detector resource.Detector) fetcher {
+func otelNodeFetcher(clusterKind NodeFlags, detector resource.Detector) fetcher {
 	log := slog.With("component", "meta.NodeMeta.otelNodeFetcher",
 		"detector", fmt.Sprintf("%T", detector)[1:])
 
@@ -61,7 +61,7 @@ func otelNodeFetcher(detector resource.Detector) fetcher {
 
 		log.Info("detected Cloud metadata")
 		attrs := resource.Iter()
-		store := NodeMeta{Metadata: make([]Entry, 0, attrs.Len())}
+		store := NodeMeta{Flags: clusterKind, Metadata: make([]Entry, 0, attrs.Len())}
 		for attrs.Next() {
 			at := attrs.Attribute()
 			switch at.Key {
