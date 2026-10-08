@@ -925,8 +925,11 @@ func getDefinitions(
 		"---- temporary placeholder for span and service graph metrics ----": {
 			Attributes: map[attr.Name]Default{
 				attr.Client:               false,
+				attr.ClientRoute:          false,
 				attr.ClientNamespace:      false,
 				attr.Server:               false,
+				attr.ServerRoute:          false,
+				attr.ServiceGraphRoute:    false,
 				attr.ServerNamespace:      false,
 				attr.Source:               false,
 				attr.ServiceName:          false,

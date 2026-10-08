@@ -1704,6 +1704,21 @@ OBI counterpart of `target.info` for the traces pipeline. Carries the resource a
 | `telemetry.sdk.name` | string | `required` | stable | The name of the telemetry SDK as defined above. | opentelemetry |
 | `telemetry.sdk.version` | string | `required` | stable | The version string of the telemetry SDK. | 1.2.3 |
 
+## `traces_service_graph_endpoint`
+
+Mapping from a local service identity to a routable DNS name, with value 1. Independent of whether the service sends or receives requests.
+
+| Instrument | Unit | Stability |
+| --- | --- | --- |
+| gauge | 1 | development |
+
+| Attribute | Type | Requirement level | Stability | Description | Examples |
+| --- | --- | --- | --- | --- | --- |
+| `route` | string | `required` | development | DNS route reaching the local service in an endpoint mapping. | cakes-api.internal |
+| `service.name` | string | `required` | stable | Logical name of the service. | shoppingcart |
+| `service.namespace` | string | `conditionally_required`: if the workload has a namespace | stable | A namespace for `service.name`. | Shop |
+| `source` | string | `required` | development | Identifier of the vendor / SDK that produced the metric. OBI sets this to `obi`. Used by the spanmetrics and service-graph emissions to disambiguate from collector-contrib connector output. | obi |
+
 ## `traces_service_graph_request_client`
 
 Client-side request duration distribution per service-graph edge.
@@ -1714,11 +1729,13 @@ Client-side request duration distribution per service-graph edge.
 
 | Attribute | Type | Requirement level | Stability | Description | Examples |
 | --- | --- | --- | --- | --- | --- |
+| `client.route` | string | `conditionally_required`: if the client has a DNS route but no service identity | development | DNS route of the client when its service identity is unknown. | frontend.internal |
 | `client_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the client (request-initiating) peer. | my-cluster |
 | `client_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the client (request-initiating) peer. | integration-test |
 | `client_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the client side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
 | `client` | string | `required` | development | Name of the service initiating the request. | frontend |
 | `connection_type` | enum | `conditionally_required`: if the connection was not a direct HTTP or gRPC request | development | The connection type between the two services (mirroring the servicegraphconnector values). The attribute is omitted for a direct HTTP/gRPC request. | messaging_system; database; virtual_node |
+| `server.route` | string | `conditionally_required`: if the server has a DNS route but no service identity | development | DNS route of the server when its service identity is unknown. | cakes-api.internal |
 | `server_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the server (request-receiving) peer. | my-cluster |
 | `server_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the server (request-receiving) peer. | integration-test |
 | `server_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the server side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
@@ -1735,11 +1752,13 @@ Total number of failed edges in the service graph, grouped by client / server.
 
 | Attribute | Type | Requirement level | Stability | Description | Examples |
 | --- | --- | --- | --- | --- | --- |
+| `client.route` | string | `conditionally_required`: if the client has a DNS route but no service identity | development | DNS route of the client when its service identity is unknown. | frontend.internal |
 | `client_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the client (request-initiating) peer. | my-cluster |
 | `client_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the client (request-initiating) peer. | integration-test |
 | `client_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the client side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
 | `client` | string | `required` | development | Name of the service initiating the request. | frontend |
 | `connection_type` | enum | `conditionally_required`: if the connection was not a direct HTTP or gRPC request | development | The connection type between the two services (mirroring the servicegraphconnector values). The attribute is omitted for a direct HTTP/gRPC request. | messaging_system; database; virtual_node |
+| `server.route` | string | `conditionally_required`: if the server has a DNS route but no service identity | development | DNS route of the server when its service identity is unknown. | cakes-api.internal |
 | `server_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the server (request-receiving) peer. | my-cluster |
 | `server_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the server (request-receiving) peer. | integration-test |
 | `server_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the server side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
@@ -1756,11 +1775,13 @@ Server-side request duration distribution per service-graph edge.
 
 | Attribute | Type | Requirement level | Stability | Description | Examples |
 | --- | --- | --- | --- | --- | --- |
+| `client.route` | string | `conditionally_required`: if the client has a DNS route but no service identity | development | DNS route of the client when its service identity is unknown. | frontend.internal |
 | `client_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the client (request-initiating) peer. | my-cluster |
 | `client_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the client (request-initiating) peer. | integration-test |
 | `client_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the client side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
 | `client` | string | `required` | development | Name of the service initiating the request. | frontend |
 | `connection_type` | enum | `conditionally_required`: if the connection was not a direct HTTP or gRPC request | development | The connection type between the two services (mirroring the servicegraphconnector values). The attribute is omitted for a direct HTTP/gRPC request. | messaging_system; database; virtual_node |
+| `server.route` | string | `conditionally_required`: if the server has a DNS route but no service identity | development | DNS route of the server when its service identity is unknown. | cakes-api.internal |
 | `server_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the server (request-receiving) peer. | my-cluster |
 | `server_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the server (request-receiving) peer. | integration-test |
 | `server_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the server side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
@@ -1777,11 +1798,13 @@ Total number of edges in the service graph, grouped by client / server.
 
 | Attribute | Type | Requirement level | Stability | Description | Examples |
 | --- | --- | --- | --- | --- | --- |
+| `client.route` | string | `conditionally_required`: if the client has a DNS route but no service identity | development | DNS route of the client when its service identity is unknown. | frontend.internal |
 | `client_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the client (request-initiating) peer. | my-cluster |
 | `client_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the client (request-initiating) peer. | integration-test |
 | `client_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the client side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
 | `client` | string | `required` | development | Name of the service initiating the request. | frontend |
 | `connection_type` | enum | `conditionally_required`: if the connection was not a direct HTTP or gRPC request | development | The connection type between the two services (mirroring the servicegraphconnector values). The attribute is omitted for a direct HTTP/gRPC request. | messaging_system; database; virtual_node |
+| `server.route` | string | `conditionally_required`: if the server has a DNS route but no service identity | development | DNS route of the server when its service identity is unknown. | cakes-api.internal |
 | `server_k8s_cluster_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes cluster name of the server (request-receiving) peer. | my-cluster |
 | `server_k8s_namespace_name` | string | `conditionally_required`: if Kubernetes decoration is enabled | development | Kubernetes namespace of the server (request-receiving) peer. | integration-test |
 | `server_service_namespace` | string | `conditionally_required`: if the workload has a namespace | development | The service namespace of the server side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |

@@ -148,6 +148,13 @@ section empty once drained.
 - The ONC RPC `rpc.method` value on `rpc.client.call.duration` and `rpc.server.call.duration`
   changes from the procedure number (for example `0`) to `{program}/{procedure}` (for example
   `portmapper/0`), and is omitted when no CALL was captured (previously `reply`).
+- Service graph metrics now use the local process's `service.name` for its
+  client/server identity. Remote endpoints resolved only through Route53 have an
+  empty `client`/`server` and a `client.route`/`server.route` instead. The new
+  `traces_service_graph_endpoint` gauge maps routes to service identities for
+  query-time enrichment. These conditional value changes cannot be represented
+  as unconditional attribute renames in the telemetry schema. Prometheus adds
+  `client_route` and `server_route` labels to all service graph request metrics.
 
 ## Hosting notes
 

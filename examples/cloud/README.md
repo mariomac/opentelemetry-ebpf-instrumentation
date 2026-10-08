@@ -63,6 +63,11 @@ Terraform uploads the executable to private S3 instead of downloading a release.
 `examples/cloud/aws`. The supplied files use Config v2, requiring OBI v0.11.0+,
 and are validated during startup.
 
+For service graph metrics using Config v1, set
+`obi_config_path=../obi-service-graph-v1.yaml`. Config v1 is validated by OBI at
+normal startup, rather than by the v2-only `obi config validate` command. Route53
+enrichment settings require Config v2 and are unavailable with this v1 example.
+
 Set `obi_environment` for exporter endpoints, secrets and other environment
 values. For example, with the supplied `obi-otlp.yaml` and a gRPC collector:
 

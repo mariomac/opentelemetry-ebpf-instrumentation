@@ -64,10 +64,11 @@ type SvcGraphMetrics struct {
 	resourceAttributes       []attribute.KeyValue
 	tracesResourceAttributes attribute.Set
 
-	serviceGraphClient *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	serviceGraphServer *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	serviceGraphFailed *Expirer[*request.Span, instrument.Int64Counter, int64]
-	serviceGraphTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphClient   *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphServer   *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphFailed   *Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphTotal    *Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphEndpoint *Expirer[*request.Span, instrument.Int64Gauge, int64]
 }
 
 func ReportSvcGraphMetrics(
@@ -238,6 +239,15 @@ func (mr *SvcGraphMetricsReporter) setupGraphMeters(m *SvcGraphMetrics, meter in
 	m.serviceGraphTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, serviceGraphTotal, mr.metricAttributes, timeNow, mr.cfg.TTL)
 
+	endpoint, err := meter.Int64Gauge(attributes.ServiceGraphEndpoint.OTEL)
+	if err != nil {
+		return fmt.Errorf("creating service graph endpoint gauge: %w", err)
+	}
+	endpointAttrs := attributes.OpenTelemetryGetters(request.SpanOTELGetters(request.UnresolvedNames{}),
+		[]attr.Name{attr.ServiceName, attr.ServiceNamespace, attr.Source})
+	m.serviceGraphEndpoint = NewExpirer[*request.Span, instrument.Int64Gauge, int64](
+		m.ctx, endpoint, endpointAttrs, timeNow, mr.cfg.TTL)
+
 	return nil
 }
 
@@ -331,18 +341,30 @@ func serviceGraphGetters(unresolved request.UnresolvedNames, k8sEnabled bool) []
 		attr.ClientNamespace,
 		attr.Server,
 		attr.ServerNamespace,
+		attr.ClientRoute,
+		attr.ServerRoute,
 		attr.Source,
 	}
 	if k8sEnabled {
 		attrs = append(attrs, attr.K8SClientCluster, attr.K8SServerCluster, attr.K8SClientNamespace, attr.K8SServerNamespace)
 	}
 	return attributes.OpenTelemetryGetters(
-		request.SpanOTELGetters(unresolved), attrs)
+		request.ServiceGraphOTELGetters(unresolved), attrs)
 }
 
 func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter) {
 	if span.IsDNSSpan() {
 		return
+	}
+
+	// TODO: publish mappings from process and inventory lifecycle events so idle
+	// processes retain them without depending on request traffic and metric TTL.
+	if len(span.LocalRoutes) == 0 {
+		r.serviceGraphEndpoint.removeOutdated(r.ctx)
+	}
+	for _, route := range span.LocalRoutes {
+		endpoint, attrs := r.serviceGraphEndpoint.ForRecord(span, attr.ServiceGraphRoute.OTEL().String(route))
+		endpoint.Record(r.ctx, 1, instrument.WithAttributeSet(attrs))
 	}
 
 	t := span.Timings()
@@ -407,6 +429,8 @@ func ConnectionTypeForSpan(span *request.Span, tracker *PidServiceTracker) strin
 }
 
 func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request.Span) bool {
+	// TODO: carry observation provenance to deduplicate edges across OBI instances;
+	// the tracker only knows services instrumented by this instance.
 	if span.HostName != "" {
 		n := svc.ServiceNameNamespace{Name: span.HostName, Namespace: span.OtherNamespace}
 		return !tracker.IsTrackingServerService(n)
@@ -491,4 +515,7 @@ func (r *SvcGraphMetrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.serviceGraphServer)
 	cleanupCounterMetrics(r.ctx, r.serviceGraphFailed)
 	cleanupCounterMetrics(r.ctx, r.serviceGraphTotal)
+	if r.serviceGraphEndpoint != nil {
+		r.serviceGraphEndpoint.RemoveAllMetrics(r.ctx)
+	}
 }

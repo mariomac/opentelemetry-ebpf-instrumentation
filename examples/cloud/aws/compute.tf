@@ -29,6 +29,7 @@ resource "aws_instance" "demo" {
     local_binary = local.binary_path != null
     binary_hash  = local.binary_path == null ? "" : filesha256(local.binary_path)
     runner       = filebase64("${path.module}/templates/obi-run.py")
+    config_v2    = can(yamldecode(file(local.config_path)).file_format)
   })
 
   dynamic "instance_market_options" {

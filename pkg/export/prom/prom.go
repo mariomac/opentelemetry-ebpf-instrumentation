@@ -52,10 +52,11 @@ var (
 	TracesTargetInfo         = attributes.TracesTargetInfo.Prom
 	TargetInfo               = attributes.TargetInfo.Prom
 
-	ServiceGraphClient = attributes.ServiceGraphClient.Prom
-	ServiceGraphServer = attributes.ServiceGraphServer.Prom
-	ServiceGraphFailed = attributes.ServiceGraphFailed.Prom
-	ServiceGraphTotal  = attributes.ServiceGraphTotal.Prom
+	ServiceGraphClient   = attributes.ServiceGraphClient.Prom
+	ServiceGraphServer   = attributes.ServiceGraphServer.Prom
+	ServiceGraphFailed   = attributes.ServiceGraphFailed.Prom
+	ServiceGraphTotal    = attributes.ServiceGraphTotal.Prom
+	ServiceGraphEndpoint = attributes.ServiceGraphEndpoint.Prom
 )
 
 const (
@@ -226,10 +227,11 @@ type metricsReporter struct {
 	tracesTargetInfo             *prometheus.GaugeVec
 
 	// trace service graph
-	serviceGraphClient *Expirer[prometheus.Histogram]
-	serviceGraphServer *Expirer[prometheus.Histogram]
-	serviceGraphFailed *Expirer[prometheus.Counter]
-	serviceGraphTotal  *Expirer[prometheus.Counter]
+	serviceGraphClient   *Expirer[prometheus.Histogram]
+	serviceGraphServer   *Expirer[prometheus.Histogram]
+	serviceGraphFailed   *Expirer[prometheus.Counter]
+	serviceGraphTotal    *Expirer[prometheus.Counter]
+	serviceGraphEndpoint *Expirer[prometheus.Gauge]
 
 	// gpu related metrics
 	cudaKernelCallsTotal            *Expirer[prometheus.Counter]
@@ -501,11 +503,11 @@ func newReporter(
 	dockerEnabled := ctxInfo.DockerMetadata.IsEnabled(ctx)
 
 	if jointMetricsConfig.Features.ServiceGraph() {
-		attrs := []attr.Name{attr.Client, attr.ClientNamespace, attr.Server, attr.ServerNamespace, attr.Source}
+		attrs := []attr.Name{attr.Client, attr.ClientNamespace, attr.Server, attr.ServerNamespace, attr.ClientRoute, attr.ServerRoute, attr.Source}
 		if kubeEnabled {
 			attrs = append(attrs, attr.K8SClientCluster, attr.K8SServerCluster, attr.K8SClientNamespace, attr.K8SServerNamespace)
 		}
-		attrSvcGraph = attributes.PrometheusGetters(attributeGetters, attrs)
+		attrSvcGraph = attributes.PrometheusGetters(request.ServiceGraphPromGetters(unresolved), attrs)
 	}
 
 	// If service name is not explicitly set, we take the service name as set by the
@@ -774,6 +776,12 @@ func newReporter(
 				Name: ServiceGraphTotal,
 				Help: "number of service calls in trace service graph metrics format",
 			}, labelNamesSvcGraph(attrSvcGraph)).MetricVec, timeNow, cfg.TTL)
+		}),
+		serviceGraphEndpoint: optionalGaugeProvider(jointMetricsConfig.Features.ServiceGraph(), func() *Expirer[prometheus.Gauge] {
+			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: ServiceGraphEndpoint,
+				Help: "mapping from a local service identity to its routable DNS names",
+			}, []string{attr.ServiceName.Prom(), attr.ServiceNamespace.Prom(), attr.ServiceGraphRoute.Prom(), sourceKey}).MetricVec, timeNow, cfg.TTL)
 		}),
 		targetInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: TargetInfo,
@@ -1053,6 +1061,7 @@ func newReporter(
 			mr.serviceGraphServer,
 			mr.serviceGraphFailed,
 			mr.serviceGraphTotal,
+			mr.serviceGraphEndpoint,
 		)
 	}
 
@@ -1149,6 +1158,13 @@ func optionalDirectGaugeProvider(enable bool, provider func() *prometheus.GaugeV
 	return provider()
 }
 
+func optionalGaugeProvider(enable bool, provider func() *Expirer[prometheus.Gauge]) *Expirer[prometheus.Gauge] {
+	if !enable {
+		return nil
+	}
+	return provider()
+}
+
 func (r *metricsReporter) reportMetrics(ctx context.Context) {
 	go r.promConnect.StartHTTP(ctx)
 	r.collectMetrics(ctx)
@@ -1241,7 +1257,8 @@ func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanMetricsObserved(span *request.Span) bool {
-	return span.Service.Features.AnySpanMetrics() && !span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
+	return (span.Service.Features.AnySpanMetrics() || span.Service.Features.ServiceGraph()) &&
+		!span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
@@ -1543,6 +1560,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 		}
 
 		if span.Service.Features.ServiceGraph() {
+			// TODO: maintain mappings independently of traffic for idle processes.
+			for _, route := range span.LocalRoutes {
+				r.serviceGraphEndpoint.WithLabelValues(sanitizeValues([]string{
+					span.Service.UID.Name, span.Service.UID.Namespace, route, attr.VendorPrefix,
+				})...).Metric.Set(1)
+			}
 			if !span.IsSelfReferenceSpan() || r.cfg.AllowServiceGraphSelfReferences {
 				lvg := labelValuesSvcGraph(span, r.attrSvcGraph, &r.pidsTracker)
 

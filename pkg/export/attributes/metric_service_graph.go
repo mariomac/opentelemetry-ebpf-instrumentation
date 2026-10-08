@@ -8,9 +8,13 @@ package attributes // import "go.opentelemetry.io/obi/pkg/export/attributes"
 //
 // They carry no Section: user-provided attribute selection is disabled for them.
 //
-// The names match the collector-contrib servicegraph connector exactly, which itself emits
-// underscore-shaped names, so they must not be renamed.
+// The request metric names match the collector-contrib servicegraph connector exactly,
+// which itself emits underscore-shaped names, so they must not be renamed.
 var (
+	ServiceGraphEndpoint = metric(Name{
+		OTEL: "traces_service_graph_endpoint",
+		Type: InstrumentGauge,
+	})
 	ServiceGraphClient = metric(Name{
 		OTEL: "traces_service_graph_request_client",
 		Unit: "s",

@@ -55,6 +55,10 @@ run "default_deployment" {
     error_message = "Release deployments must wait for startup without requiring a local binary."
   }
   assert {
+    condition     = alltrue([for instance in aws_instance.demo : strcontains(instance.user_data, "'config', 'validate'")])
+    error_message = "Config v2 must be validated before starting services."
+  }
+  assert {
     condition     = aws_vpc_security_group_ingress_rule.backend.from_port == 8081 && aws_vpc_security_group_ingress_rule.backend.referenced_security_group_id == aws_security_group.demo["frontend"].id
     error_message = "Only the frontend security group may reach the backend application port."
   }
@@ -98,6 +102,17 @@ run "return_to_release" {
   assert {
     condition     = length(aws_s3_object.binary) == 0 && alltrue([for instance in aws_instance.demo : strcontains(instance.user_data, "releases/download/v0.14.0")])
     error_message = "Removing the local binary override must restore release installation on both nodes."
+  }
+}
+
+run "service_graph_v1" {
+  command = plan
+  variables {
+    obi_config_path = "../obi-service-graph-v1.yaml"
+  }
+  assert {
+    condition     = contains(yamldecode(file(aws_s3_object.config.source)).metrics.features, "application_service_graph") && alltrue([for instance in aws_instance.demo : !strcontains(instance.user_data, "'config', 'validate'") && strcontains(instance.user_data, "systemctl enable --now obi demo")])
+    error_message = "Config v1 must enable service graphs and use normal OBI startup validation."
   }
 }
 

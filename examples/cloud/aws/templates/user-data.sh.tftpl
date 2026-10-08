@@ -39,6 +39,7 @@ rm "$archive"
 chmod 700 /opt/obi/obi
 printf '%s' '${runner}' | base64 --decode > /opt/obi/run.py
 
+%{ if config_v2 ~}
 # Config v2 validation runs with the same environment as the service.
 python3 - '${service}' <<'PY'
 import json
@@ -51,6 +52,7 @@ with open('/etc/obi/environment.json', encoding='utf-8') as file:
 subprocess.run(['/opt/obi/obi', 'config', 'validate', '/etc/obi/config.yaml'],
                env=environment, check=True)
 PY
+%{ endif ~}
 
 GOCACHE=/opt/demo/go-cache GOMAXPROCS=1 CGO_ENABLED=0 GO111MODULE=off go build -p 1 -o /opt/demo/${service} /opt/demo/main.go
 chmod 755 /opt/demo /opt/demo/${service}

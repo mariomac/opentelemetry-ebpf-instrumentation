@@ -6,6 +6,7 @@ package transform
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -16,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/internal/cloud"
 	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -153,7 +156,7 @@ func TestRoute53InventoryRegion(t *testing.T) {
 }
 
 func TestRoute53ResolverPrecedence(t *testing.T) {
-	route53 := fakeECSResolver{"10.0.0.1": "dns.example.com", "10.0.0.2": "other.example.com"}
+	route53 := fakeRoute53Resolver{"10.0.0.1": {"dns.example.com"}, "10.0.0.2": {"other.example.com"}}
 	ecs := fakeECSResolver{"10.0.0.1": "ecs-service"}
 	for _, tc := range []struct {
 		name       string
@@ -177,9 +180,67 @@ func TestRoute53ResolverPrecedence(t *testing.T) {
 			span := request.Span{Type: request.EventTypeHTTPClient, Host: "10.0.0.1", Peer: "10.0.0.2"}
 			resolver.resolveNames(&span)
 			assert.Equal(t, tc.wantHost, span.HostName)
+			if tc.name == "route53 only" {
+				assert.Equal(t, tc.wantHost, span.HostRoute)
+			} else {
+				assert.Empty(t, span.HostRoute)
+			}
 			if len(tc.refreshers) > 0 {
 				assert.Equal(t, "other.example.com", span.PeerName)
 			}
+		})
+	}
+}
+
+type fakeRoute53Resolver map[string][]string
+
+func (fakeRoute53Resolver) Name() string { return "route53" }
+
+func (f fakeRoute53Resolver) Refresh(_ context.Context, snapshot *cloud.MetadataSnapshot) error {
+	maps.Copy(snapshot.RoutesByIP, f)
+	return nil
+}
+
+func TestRoute53ServiceGraphEndpoints(t *testing.T) {
+	inventory := cloud.NewInventory([]cloud.MetadataRefresher{fakeRoute53Resolver{
+		"10.0.0.1": {"frontend.internal"},
+		"10.0.0.2": {"cakes-api.internal", "backend.internal", "cakes-api.internal"},
+	}})
+	startCloudInventory(t, inventory, time.Hour)
+	resolver := NameResolver{cloudInventory: inventory, logger: nrlog()}
+	for _, tc := range []struct {
+		name        string
+		span        request.Span
+		localRoutes []string
+		clientRoute string
+		serverRoute string
+	}{
+		{
+			name: "outgoing request",
+			span: request.Span{
+				Type: request.EventTypeHTTPClient, Peer: "10.0.0.1", Host: "10.0.0.2",
+				Service: svc.Attrs{Features: export.FeatureGraph, UID: svc.UID{Name: "cakes-frontend"}},
+			},
+			localRoutes: []string{"frontend.internal"}, serverRoute: "backend.internal",
+		},
+		{
+			name: "incoming request",
+			span: request.Span{
+				Type: request.EventTypeHTTP, Peer: "10.0.0.1", Host: "10.0.0.2",
+				Service: svc.Attrs{Features: export.FeatureGraph, UID: svc.UID{Name: "cakes-backend"}},
+			},
+			localRoutes: []string{"backend.internal", "cakes-api.internal"}, clientRoute: "frontend.internal",
+		},
+		{
+			name: "service graph disabled",
+			span: request.Span{Type: request.EventTypeHTTP, Host: "10.0.0.2"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolver.resolveNames(&tc.span)
+			assert.Equal(t, tc.localRoutes, tc.span.LocalRoutes)
+			assert.Equal(t, tc.clientRoute, tc.span.PeerRoute)
+			assert.Equal(t, tc.serverRoute, tc.span.HostRoute)
 		})
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -30,8 +31,11 @@ type MetadataRefresher interface {
 //     Useful for service graphs and peer address resolution.
 //   - those that are identifiable by a local ID (e.g. ECS container).
 //     Useful for RED metrics decoration of services in the same host as OBI
+//
+// DNS routes are kept separately because they do not identify an OTel service.
 type MetadataSnapshot struct {
 	ServiceByIP          map[string]string
+	RoutesByIP           map[string][]string
 	ServiceByContainerID map[string]string
 }
 
@@ -65,13 +69,33 @@ func (i *Inventory) SubscribeContainerChanges() <-chan ContainerChanges {
 }
 
 func (i *Inventory) ServiceNameForIP(ip string) (string, bool) {
+	name, _ := i.NameAndRouteForIP(ip)
+	return name, name != ""
+}
+
+// NameAndRouteForIP distinguishes service identities from DNS-only endpoint names.
+func (i *Inventory) NameAndRouteForIP(ip string) (name, route string) {
 	if addr, err := netip.ParseAddr(ip); err == nil {
 		ip = addr.Unmap().String()
 	}
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	name, ok := i.snapshot.ServiceByIP[ip]
-	return name, ok
+	if name := i.snapshot.ServiceByIP[ip]; name != "" {
+		return name, ""
+	}
+	if routes := i.snapshot.RoutesByIP[ip]; len(routes) > 0 {
+		return routes[0], routes[0]
+	}
+	return "", ""
+}
+
+func (i *Inventory) RoutesForIP(ip string) []string {
+	if addr, err := netip.ParseAddr(ip); err == nil {
+		ip = addr.Unmap().String()
+	}
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	return slices.Clone(i.snapshot.RoutesByIP[ip])
 }
 
 func (i *Inventory) ServiceNameForContainerID(id string) (string, bool) {
@@ -88,7 +112,7 @@ func (i *Inventory) refresh(ctx context.Context) {
 }
 
 func (i *Inventory) refreshSource(ctx context.Context, index int) {
-	next := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}}
+	next := MetadataSnapshot{ServiceByIP: map[string]string{}, RoutesByIP: map[string][]string{}, ServiceByContainerID: map[string]string{}}
 	r := i.refreshers[index]
 	if err := r.Refresh(ctx, &next); err != nil {
 		i.log.Warn("can't refresh cloud metadata", "source", r.Name(), "error", err)
@@ -98,10 +122,17 @@ func (i *Inventory) refreshSource(ctx context.Context, index int) {
 	i.publishMu.Lock()
 	defer i.publishMu.Unlock()
 	i.sources[index] = next
-	snapshot := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}}
+	snapshot := MetadataSnapshot{ServiceByIP: map[string]string{}, RoutesByIP: map[string][]string{}, ServiceByContainerID: map[string]string{}}
 	for _, source := range i.sources {
 		maps.Copy(snapshot.ServiceByIP, source.ServiceByIP)
 		maps.Copy(snapshot.ServiceByContainerID, source.ServiceByContainerID)
+		for ip, routes := range source.RoutesByIP {
+			snapshot.RoutesByIP[ip] = append(snapshot.RoutesByIP[ip], routes...)
+		}
+	}
+	for ip, routes := range snapshot.RoutesByIP {
+		slices.Sort(routes)
+		snapshot.RoutesByIP[ip] = slices.Compact(routes)
 	}
 	i.mu.Lock()
 	changes := ContainerChanges{

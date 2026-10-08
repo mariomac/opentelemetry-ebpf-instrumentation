@@ -4,10 +4,14 @@ groups:
     display_name: Service Graph
     brief: >
       Attributes used by OBI's service-graph emission. The metric names and
-      label set match the output of the OTel collector-contrib
+      base label set match the output of the OTel collector-contrib
       `servicegraphconnector` so the same dashboards consume both
       OBI-emitted and connector-emitted data. Emitted when OBI's
       `application_service_graph` metrics feature is enabled.
+
+      DNS-only remote endpoints use `client.route` or `server.route` with
+      an empty service name. The OBI-specific endpoint gauge maps DNS routes
+      back to local service identities.
 
       The OBI-specific `source` attribute is declared in `obi_internal/registry.yaml`.
 
@@ -24,6 +28,21 @@ groups:
         stability: development
         brief: Name of the service initiating the request.
         examples: ["frontend"]
+      - id: client.route
+        type: string
+        stability: development
+        brief: DNS route of the client when its service identity is unknown.
+        examples: ["frontend.internal"]
+      - id: server.route
+        type: string
+        stability: development
+        brief: DNS route of the server when its service identity is unknown.
+        examples: ["cakes-api.internal"]
+      - id: route
+        type: string
+        stability: development
+        brief: DNS route reaching the local service in an endpoint mapping.
+        examples: ["cakes-api.internal"]
       - id: connection_type
         type:
           allow_custom_values: true

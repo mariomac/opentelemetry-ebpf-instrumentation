@@ -581,7 +581,7 @@ func TestResolver(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			name, ns, _ := nr.resolve(&svcAttrs, tt.ip, tt.fallback)
+			name, ns, _, _ := nr.resolve(&svcAttrs, tt.ip, tt.fallback)
 			assert.Equal(t, tt.expectedName, name)
 			assert.Equal(t, tt.expectedNamespace, ns)
 		})
@@ -601,12 +601,12 @@ func TestRDNSMissFallsThroughToDNS(t *testing.T) {
 	}
 	svcAttrs := svc.Attrs{UID: svc.UID{Name: "test-service", Namespace: "default"}}
 
-	name, ns, _ := nr.dnsResolve(&svcAttrs, "10.0.0.1")
+	name, ns, _, _ := nr.dnsResolve(&svcAttrs, "10.0.0.1")
 	assert.Equal(t, "redis.example.internal", name)
 	assert.Equal(t, "default", ns)
 
 	// rdns cache miss must reach the dns source, which returns the IP on PTR failure
-	name, ns, _ = nr.dnsResolve(&svcAttrs, "10.0.0.99")
+	name, ns, _, _ = nr.dnsResolve(&svcAttrs, "10.0.0.99")
 	assert.Equal(t, "10.0.0.99", name)
 	assert.Equal(t, "default", ns)
 }

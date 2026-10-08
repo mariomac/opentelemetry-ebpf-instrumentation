@@ -68,7 +68,12 @@ func TestRoute53Refresh(t *testing.T) {
 	name, ok = inventory.ServiceNameForIP("2001:db8:0:0::1")
 	assert.True(t, ok)
 	assert.Equal(t, "ipv6.example", name)
-	assert.Len(t, inventory.snapshot.ServiceByIP, 2)
+	assert.Empty(t, inventory.snapshot.ServiceByIP)
+	assert.Len(t, inventory.snapshot.RoutesByIP, 2)
+	assert.Equal(t, []string{"a.example", "b.example", "z.example"}, inventory.RoutesForIP("10.0.0.1"))
+	name, route := inventory.NameAndRouteForIP("10.0.0.1")
+	assert.Equal(t, "a.example", name)
+	assert.Equal(t, name, route)
 }
 
 func TestRoute53RetainsSnapshotAndRemovesDeletedRecords(t *testing.T) {
@@ -96,6 +101,7 @@ func TestRoute53RetainsSnapshotAndRemovesDeletedRecords(t *testing.T) {
 	inventory.refresh(t.Context())
 	_, ok = inventory.ServiceNameForIP("10.0.0.1")
 	assert.False(t, ok)
+	assert.Empty(t, inventory.RoutesForIP("10.0.0.1"))
 	select {
 	case <-changes:
 		t.Fatal("IP-only refresh published container changes")

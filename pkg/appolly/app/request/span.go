@@ -1551,6 +1551,9 @@ type Span struct {
 	Pid               PidInfo        `json:"-"`
 	PeerName          string         `json:"peerName"`
 	HostName          string         `json:"hostName"`
+	PeerRoute         string         `json:"-"`
+	HostRoute         string         `json:"-"`
+	LocalRoutes       []string       `json:"-"`
 	OtherNamespace    string         `json:"-"`
 	OtherK8SNamespace string         `json:"-"`
 	Statement         string         `json:"-"`

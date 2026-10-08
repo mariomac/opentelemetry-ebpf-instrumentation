@@ -202,14 +202,14 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	}
 
 	if span.IsClientSpan() {
-		hn, span.OtherNamespace, span.OtherK8SNamespace = nr.resolve(&span.Service, span.Host, span.HostName)
+		hn, span.OtherNamespace, span.OtherK8SNamespace, span.HostRoute = nr.resolve(&span.Service, span.Host, span.HostName)
 		if hn == "" || hn == span.Host {
 			hostHeader := request.HostFromSchemeHost(span)
 			if hostHeader != "" {
 				hn, span.OtherNamespace = parseK8sFQDN(hostHeader)
 			}
 		}
-		pn, ns, _ = nr.resolve(&span.Service, span.Peer, span.PeerName)
+		pn, ns, _, _ = nr.resolve(&span.Service, span.Peer, span.PeerName)
 		if pn == "" || pn == span.Peer {
 			pn = span.Service.UID.Name
 			if ns == "" {
@@ -217,8 +217,8 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 			}
 		}
 	} else {
-		pn, span.OtherNamespace, span.OtherK8SNamespace = nr.resolve(&span.Service, span.Peer, span.PeerName)
-		hn, ns, _ = nr.resolve(&span.Service, span.Host, span.HostName)
+		pn, span.OtherNamespace, span.OtherK8SNamespace, span.PeerRoute = nr.resolve(&span.Service, span.Peer, span.PeerName)
+		hn, ns, _, _ = nr.resolve(&span.Service, span.Host, span.HostName)
 		if hn == "" || hn == span.Host {
 			hn = span.Service.UID.Name
 			if ns == "" {
@@ -236,6 +236,15 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	}
 	if hn != "" {
 		span.HostName = hn
+	}
+	if span.Service.Features.ServiceGraph() && nr.cloudInventory != nil {
+		localIP := span.Host
+		if span.IsClientSpan() {
+			localIP = span.Peer
+		}
+		// TODO: attribute routes by port/process when a VM hosts multiple services,
+		// and use cloud metadata for addresses hidden by NAT or loopback traffic.
+		span.LocalRoutes = nr.cloudInventory.RoutesForIP(localIP)
 	}
 
 	nr.logger.Debug("resolved peer names",
@@ -261,12 +270,12 @@ func (nr *NameResolver) resolveLocalCloudInventory(span *request.Span) {
 // resolve attempts to resolve an IP address to a hostname using available resolution methods.
 // If resolution fails (no K8s metadata, no DNS/RDNS entry), it returns the fallback value if provided,
 // otherwise it returns the IP itself.
-func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (string, string, string) {
-	var name, ns, k8sNs string
+func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (string, string, string, string) {
+	var name, ns, k8sNs, route string
 
 	if len(ip) > 0 {
 		var peer string
-		peer, ns, k8sNs = nr.dnsResolve(svc, ip)
+		peer, ns, k8sNs, route = nr.dnsResolve(svc, ip)
 		name = ip
 		if fallback != "" {
 			name = fallback
@@ -278,7 +287,7 @@ func (nr *NameResolver) resolve(svc *svc.Attrs, ip string, fallback string) (str
 		name = fallback
 	}
 
-	return name, ns, k8sNs
+	return name, ns, k8sNs, route
 }
 
 func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) string {
@@ -297,9 +306,9 @@ func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) string {
 	return n
 }
 
-func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, string) {
+func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, string, string) {
 	if ip == "" {
-		return "", "", ""
+		return "", "", "", ""
 	}
 
 	if nr.sources.Has(ResolverK8s) && nr.store != nil {
@@ -309,32 +318,33 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, s
 			n, ns, k8sNs := nr.resolveFromK8s(ip)
 
 			if n != "" {
-				return n, ns, k8sNs
+				return n, ns, k8sNs, ""
 			}
 		}
 	}
 
 	if nr.cloudInventory != nil {
-		if name, ok := nr.cloudInventory.ServiceNameForIP(ip); ok {
-			return name, "", ""
+		if name, route := nr.cloudInventory.NameAndRouteForIP(ip); name != "" {
+			return name, "", "", route
 		}
 	}
 
 	if nr.sources.Has(ResolverRDNS) && nr.dnsCache != nil {
 		if n := nr.resolveRDNS(ip); n != "" {
-			return nr.cleanName(svc, ip, n), svc.UID.Namespace, ""
+			return nr.cleanName(svc, ip, n), svc.UID.Namespace, "", ""
 		}
 	}
 
 	if nr.sources.Has(ResolverDNS) {
 		n := nr.resolveIP(ip)
 		if n == ip {
-			return n, svc.UID.Namespace, ""
+			return n, svc.UID.Namespace, "", ""
 		}
 		n = nr.cleanName(svc, ip, n)
-		return n, svc.UID.Namespace, ""
+		return n, svc.UID.Namespace, "", ""
 	}
-	return "", "", ""
+	// TODO: preserve DNS/RDNS and HTTP authority provenance for routed graphs too.
+	return "", "", "", ""
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string, string) {

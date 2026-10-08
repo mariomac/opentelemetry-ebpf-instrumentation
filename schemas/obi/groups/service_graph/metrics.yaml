@@ -1,4 +1,24 @@
 groups:
+  - id: metric.obi.traces_service_graph_endpoint
+    type: metric
+    metric_name: traces_service_graph_endpoint
+    instrument: gauge
+    unit: ""
+    stability: development
+    brief: >
+      Mapping from a local service identity to a routable DNS name, with value 1.
+      Independent of whether the service sends or receives requests.
+    attributes:
+      - ref: service.name
+        requirement_level: required
+      - ref: service.namespace
+        requirement_level:
+          conditionally_required: if the workload has a namespace
+      - ref: route
+        requirement_level: required
+      - ref: source
+        requirement_level: required
+
   # Counter has no explicit OTLP unit set; mirror that here so live-check
   # doesn't complain "Unit should be '1', but found ''".
   - id: metric.obi.traces_service_graph_request_total
@@ -14,6 +34,12 @@ groups:
         requirement_level: required
       - ref: server
         requirement_level: required
+      - ref: client.route
+        requirement_level:
+          conditionally_required: if the client has a DNS route but no service identity
+      - ref: server.route
+        requirement_level:
+          conditionally_required: if the server has a DNS route but no service identity
       - ref: connection_type
         requirement_level:
           conditionally_required: if the connection was not a direct HTTP or gRPC request
@@ -54,6 +80,12 @@ groups:
         requirement_level: required
       - ref: server
         requirement_level: required
+      - ref: client.route
+        requirement_level:
+          conditionally_required: if the client has a DNS route but no service identity
+      - ref: server.route
+        requirement_level:
+          conditionally_required: if the server has a DNS route but no service identity
       - ref: connection_type
         requirement_level:
           conditionally_required: if the connection was not a direct HTTP or gRPC request
@@ -91,6 +123,12 @@ groups:
         requirement_level: required
       - ref: server
         requirement_level: required
+      - ref: client.route
+        requirement_level:
+          conditionally_required: if the client has a DNS route but no service identity
+      - ref: server.route
+        requirement_level:
+          conditionally_required: if the server has a DNS route but no service identity
       - ref: connection_type
         requirement_level:
           conditionally_required: if the connection was not a direct HTTP or gRPC request
@@ -128,6 +166,12 @@ groups:
         requirement_level: required
       - ref: server
         requirement_level: required
+      - ref: client.route
+        requirement_level:
+          conditionally_required: if the client has a DNS route but no service identity
+      - ref: server.route
+        requirement_level:
+          conditionally_required: if the server has a DNS route but no service identity
       - ref: connection_type
         requirement_level:
           conditionally_required: if the connection was not a direct HTTP or gRPC request

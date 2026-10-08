@@ -115,12 +115,16 @@ func TestInventoryRefresherNodeWithoutMetadata(t *testing.T) {
 }
 
 func TestInventorySourcesRefreshIndependently(t *testing.T) {
-	route53 := &snapshotRefresher{snapshot: MetadataSnapshot{ServiceByIP: map[string]string{"10.0.0.1": "dns", "10.0.0.2": "dns-only"}}}
+	route53 := &snapshotRefresher{snapshot: MetadataSnapshot{RoutesByIP: map[string][]string{"10.0.0.1": {"dns"}, "10.0.0.2": {"dns-only"}}}}
 	ecs := &snapshotRefresher{snapshot: MetadataSnapshot{ServiceByIP: map[string]string{"10.0.0.1": "ecs"}}}
 	inventory := NewInventory([]MetadataRefresher{route53, ecs})
 	inventory.refresh(t.Context())
 	name, _ := inventory.ServiceNameForIP("10.0.0.1")
 	require.Equal(t, "ecs", name)
+	name, route := inventory.NameAndRouteForIP("10.0.0.1")
+	require.Equal(t, "ecs", name)
+	require.Empty(t, route)
+	require.Equal(t, []string{"dns"}, inventory.RoutesForIP("10.0.0.1"))
 
 	route53.err = errors.New("throttled")
 	ecs.snapshot = MetadataSnapshot{ServiceByIP: map[string]string{"10.0.0.1": "ecs-updated"}}
@@ -134,6 +138,9 @@ func TestInventorySourcesRefreshIndependently(t *testing.T) {
 	inventory.refreshSource(t.Context(), 1)
 	name, _ = inventory.ServiceNameForIP("10.0.0.1")
 	require.Equal(t, "dns", name)
+	name, route = inventory.NameAndRouteForIP("10.0.0.1")
+	require.Equal(t, "dns", name)
+	require.Equal(t, name, route)
 	route53.err = nil
 	route53.snapshot = MetadataSnapshot{}
 	inventory.refreshSource(t.Context(), 0)

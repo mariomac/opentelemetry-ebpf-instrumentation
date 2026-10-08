@@ -138,15 +138,18 @@ RPC attributes OBI emits that are not part of upstream semconv.
 
 ## `registry.obi.service_graph`
 
-Attributes used by OBI's service-graph emission. The metric names and label set match the output of the OTel collector-contrib `servicegraphconnector` so the same dashboards consume both OBI-emitted and connector-emitted data. Emitted when OBI's `application_service_graph` metrics feature is enabled. The OBI-specific `source` attribute is declared in `obi_internal/registry.yaml`. See: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector
+Attributes used by OBI's service-graph emission. The metric names and base label set match the output of the OTel collector-contrib `servicegraphconnector` so the same dashboards consume both OBI-emitted and connector-emitted data. Emitted when OBI's `application_service_graph` metrics feature is enabled. DNS-only remote endpoints use `client.route` or `server.route` with an empty service name. The OBI-specific endpoint gauge maps DNS routes back to local service identities. The OBI-specific `source` attribute is declared in `obi_internal/registry.yaml`. See: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector
 
 | Attribute | Type | Stability | Description | Examples |
 | --- | --- | --- | --- | --- |
+| `client.route` | string | development | DNS route of the client when its service identity is unknown. | frontend.internal |
 | `client_k8s_cluster_name` | string | development | Kubernetes cluster name of the client (request-initiating) peer. | my-cluster |
 | `client_k8s_namespace_name` | string | development | Kubernetes namespace of the client (request-initiating) peer. | integration-test |
 | `client_service_namespace` | string | development | The service namespace of the client side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |
 | `client` | string | development | Name of the service initiating the request. | frontend |
 | `connection_type` | enum | development | The connection type between the two services (mirroring the servicegraphconnector values). The attribute is omitted for a direct HTTP/gRPC request. | messaging_system; database; virtual_node |
+| `route` | string | development | DNS route reaching the local service in an endpoint mapping. | cakes-api.internal |
+| `server.route` | string | development | DNS route of the server when its service identity is unknown. | cakes-api.internal |
 | `server_k8s_cluster_name` | string | development | Kubernetes cluster name of the server (request-receiving) peer. | my-cluster |
 | `server_k8s_namespace_name` | string | development | Kubernetes namespace of the server (request-receiving) peer. | integration-test |
 | `server_service_namespace` | string | development | The service namespace of the server side. Equivalent to the `service.namespace`-prefixed dimension defined by `servicegraphconnector` when `service.namespace` is added to the connector's `dimensions` list. | integration-test |

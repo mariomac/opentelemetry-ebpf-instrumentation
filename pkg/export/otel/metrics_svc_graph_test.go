@@ -76,11 +76,11 @@ func TestServiceGraphMetrics(t *testing.T) {
 	}
 
 	require.Equal(t, map[string]struct{}{
-		"traces_service_graph_request_client:server-host:client-host":       {},
-		"traces_service_graph_request_server:client-host:server-host":       {},
-		"traces_service_graph_request_failed_total:server-host:client-host": {},
-		"traces_service_graph_request_failed_total:client-host:server-host": {},
-		"traces_service_graph_request_total:client-host:server-host":        {},
+		"traces_service_graph_request_client:client:client-host":       {},
+		"traces_service_graph_request_server:client-host:server":       {},
+		"traces_service_graph_request_failed_total:client:client-host": {},
+		"traces_service_graph_request_failed_total:client-host:server": {},
+		"traces_service_graph_request_total:client-host:server":        {},
 	}, reported)
 }
 

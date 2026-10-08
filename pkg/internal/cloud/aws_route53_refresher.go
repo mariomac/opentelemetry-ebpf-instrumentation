@@ -45,6 +45,9 @@ func NewRoute53Inventory(client Route53Client, hostedZoneIDs []string) *Route53I
 func (i *Route53Inventory) Name() string { return "route53" }
 
 func (i *Route53Inventory) Refresh(ctx context.Context, snapshot *MetadataSnapshot) error {
+	if snapshot.RoutesByIP == nil {
+		snapshot.RoutesByIP = map[string][]string{}
+	}
 	for _, zone := range i.hostedZoneIDs {
 		pages := route53.NewListResourceRecordSetsPaginator(i.client, &route53.ListResourceRecordSetsInput{HostedZoneId: &zone})
 		for pages.HasMorePages() {
@@ -62,7 +65,7 @@ func (i *Route53Inventory) Refresh(ctx context.Context, snapshot *MetadataSnapsh
 				return fmt.Errorf("listing Route53 records for hosted zone %q: %w", zone, err)
 			}
 			for _, record := range out.ResourceRecordSets {
-				addRoute53Record(snapshot.ServiceByIP, record)
+				addRoute53Record(snapshot.RoutesByIP, record)
 			}
 		}
 	}
@@ -70,7 +73,9 @@ func (i *Route53Inventory) Refresh(ctx context.Context, snapshot *MetadataSnapsh
 	return nil
 }
 
-func addRoute53Record(next map[string]string, record types.ResourceRecordSet) {
+func addRoute53Record(next map[string][]string, record types.ResourceRecordSet) {
+	// TODO: resolve CNAME chains and aliases, including the backend attribution
+	// needed when an alias points at a load balancer rather than a VM.
 	if record.Type != types.RRTypeA && record.Type != types.RRTypeAaaa {
 		return
 	}
@@ -84,9 +89,8 @@ func addRoute53Record(next map[string]string, record types.ResourceRecordSet) {
 			continue
 		}
 		ip := addr.Unmap().String()
-		// DNS names need not be unique per IP; keep selection independent of API order.
-		if previous, ok := next[ip]; !ok || name < previous {
-			next[ip] = name
+		if !slices.Contains(next[ip], name) {
+			next[ip] = append(next[ip], name)
 		}
 	}
 }
