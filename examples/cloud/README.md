@@ -63,10 +63,16 @@ Terraform uploads the executable to private S3 instead of downloading a release.
 `examples/cloud/aws`. The supplied files use Config v2, requiring OBI v0.11.0+,
 and are validated during startup.
 
-For service graph metrics using Config v1, set
-`obi_config_path=../obi-service-graph-v1.yaml`. Config v1 is validated by OBI at
-normal startup, rather than by the v2-only `obi config validate` command. Route53
-enrichment settings require Config v2 and are unavailable with this v1 example.
+For routed service graph metrics and HTTP/protobuf OTLP export, set
+`obi_config_path=../obi-service-graph-otlp.yaml`. This Config v2 example enables
+application and service graph metrics, resolves names from Route53, and keeps
+Prometheus metrics on port 9400. Supply `ROUTE53_HOSTED_ZONE_ID`,
+`OTEL_EXPORTER_OTLP_ENDPOINT` (without `/v1/metrics` or `/v1/traces`), and
+`OTEL_EXPORTER_OTLP_HEADERS` through `obi_environment`. The AWS credentials used
+by OBI must allow `route53:ListResourceRecordSets` on that hosted zone. The example
+polls Route53 every ten seconds for testing; increase the interval for larger
+deployments. Export success and error counters are available on port 9401 at
+`/internal/metrics`.
 
 Set `obi_environment` for exporter endpoints, secrets and other environment
 values. For example, with the supplied `obi-otlp.yaml` and a gRPC collector:
@@ -78,6 +84,10 @@ export TF_VAR_obi_environment='{
 }'
 terraform -chdir=examples/cloud/aws apply -var='obi_config_path=../obi-otlp.yaml'
 ```
+
+For `obi-service-graph-otlp.yaml`, set the protocol to `http/protobuf` and use a
+literal space in `Authorization=Basic ...`. The Python launcher passes the header
+unchanged; do not replace the space with `%20`.
 
 For plain HTTP, also set `OTLP_INSECURE` to `"true"`. Config v2 references variables
 explicitly in YAML; a legacy `OTEL_EBPF_*` variable alone does not override a v2
